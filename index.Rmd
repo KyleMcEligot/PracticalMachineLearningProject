@@ -1,0 +1,222 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: "Kyle McEligot"
+
+---
+
+
+##Executive Summary
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+The goal of the project is to predict the manner in which they did the exercise.
+
+### Data provided courtesy of:
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+Read more: http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises#ixzz3vWGDyDo2
+
+### Load Needed Libraries
+```{r, results="hide"}
+library(caret, quietly = TRUE)
+library(rpart, quietly = TRUE)
+suppressMessages(library(randomForest, quietly = TRUE, verbose = FALSE))
+suppressMessages(library(survival, quietly = TRUE, verbose = FALSE))
+suppressMessages(library(gbm, quietly = TRUE, verbose = FALSE))
+library(plyr, quietly = TRUE)
+```
+
+## Data Loading
+```{r, echo=TRUE}
+plm.training <- read.csv("Data/pml-training.csv", header=T,
+                         na.strings=c("", "NA", "NULL"))
+plm.testing <- read.csv("Data/pml-testing.csv",header=T,
+                         na.strings=c("", "NA", "NULL"))
+
+dim(plm.training)
+dim(plm.testing)
+
+```
+
+## Cleaning Data
+
+Exploratory Data Analysis showed that:  
+
+* many of the columns had many NA values
+    + note: "" and "NULL" were converted to NA with read.csv
+* the first 7 columns contain variables that are not relevant to the dependent variable
+* many of the columns had many NA values (with non being completely NA)
+* some columns were highly correlated
+
+```{r, echo=TRUE}
+# Remove the first 7 columns.
+training.set <- plm.training[, 
+                -which(names(plm.training) %in% 
+                 c('X',
+                  'user_name',
+                  'raw_timestamp_part_1',
+                  'raw_timestamp_part_2', 
+                  'cvtd_timestamp',                         
+                  'new_window', 
+                  'num_window'))]
+
+dim(training.set)
+
+# Remove columns with many NA values
+datavariables <- 
+  apply(!is.na(training.set),2,sum) >= dim(training.set)[1]
+training.set <- training.set[, datavariables]
+
+dim(training.set)
+
+# Remove columns that are highly correlated
+
+correlation.info <- 
+  cor(na.omit(training.set[
+                sapply(training.set, is.numeric)]))
+training.set <- training.set[,
+                             -c(findCorrelation(correlation.info, 
+                                                cutoff = .90))]
+dim(training.set)
+                     
+```
+
+
+## Models
+
+Three different models will be trained:
+
+1. Decision Trees
+2. Random Forest
+3. Boosting
+
+The best performing model will be selected. 
+
+For this approach, the test dataset will be split into two: train and predict. 
+
+
+```{r, echo=TRUE}
+set.seed(1234)
+ 
+inTrain <- createDataPartition(y=training.set$classe, 
+                               p = 0.7, list=FALSE)
+
+train <- training.set[inTrain,]
+probe <- training.set[-inTrain,]
+
+dim(train)
+dim(probe)
+
+```
+Cross validation is set for the models through trainControl
+```{r, echo=TRUE}
+# Set up the trainControl for all models 
+#   with method cv (cross validation) at 3
+trControl = trainControl(method="cv", number=3)
+
+```
+### Decision Tree
+
+```{r, echo=TRUE}
+# Start the clock!
+ptm <- proc.time()
+
+decision.tree.model <- train(classe ~ .,
+                             data=train,
+                             trControl=trControl,
+                             method='rpart')
+
+# Stop the clock
+proc.time() - ptm
+
+decision.tree.predict <- predict(decision.tree.model, 
+                                 newdata = probe)
+confusionMatrix.decision.tree <- 
+  confusionMatrix(decision.tree.predict, probe$classe)
+```
+
+### Random Forest
+
+```{r, echo=TRUE}
+# Start the clock!
+ptm <- proc.time()
+
+random.forest.model <- train(classe ~ .,
+                             data=train,
+                             trControl=trControl,
+                             method='rf')
+
+# Stop the clock
+proc.time() - ptm
+
+random.forest.predict <- predict(random.forest.model, 
+                                 newdata = probe)
+confusionMatrix.random.forest <- 
+  confusionMatrix(random.forest.predict, probe$classe)
+
+```
+
+
+### Boosting
+
+```{r, echo=TRUE}
+# Start the clock!
+ptm <- proc.time()
+
+boosting.model <- train(classe ~ .,
+                        data=train,
+                        trControl=trControl,
+                        verbose=FALSE,
+                        method='gbm')
+
+# Stop the clock
+proc.time() - ptm
+
+boosting.predict <- predict(boosting.model, 
+                                 newdata = probe)
+confusionMatrix.boosting <- 
+  confusionMatrix(boosting.predict, probe$classe)
+```
+
+
+## Evaluating the Models
+
+To evaluate the models, look at
+ - accuracy (from confusion matrix)  
+ - out of sample error for model types  
+
+```{r, echo=TRUE}
+data.frame(
+  Model.Type = c('Decision Tree', 'Random Forest', 'Boosting'),
+  Accuracy = rbind(confusionMatrix.decision.tree$overall['Accuracy'],
+                   confusionMatrix.random.forest$overall['Accuracy'],
+                   confusionMatrix.boosting$overall['Accuracy']))
+```
+
+We can see that random forest is most accurate at 
+`r confusionMatrix.random.forest$overall['Accuracy']`
+
+```{r, echo=TRUE}
+
+confusionMatrix.decision.tree$table
+confusionMatrix.random.forest$table
+confusionMatrix.boosting$table
+
+```
+
+## Prediction on test data - using best performing model
+
+The best performing model of the three was Random Forest. It will be used
+on the testing data (pml-testing.csv) to predict a class for each of the 20 test cases.
+
+```{r, echo=TRUE}
+rf.test.prediction <- predict(random.forest.model,
+                        newdata = plm.testing)
+rf.test.prediction
+```
+
+## Conclusion
+
+Of the three models tried, the random forest performed best, with very good accuracy.  That model was used to predict using the test data from the website.
+
