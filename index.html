@@ -234,7 +234,7 @@ decision.tree.model &lt;- train(classe ~ .,
 # Stop the clock
 proc.time() - ptm</code></pre>
 <pre><code>##    user  system elapsed 
-##    4.32    0.08    4.45</code></pre>
+##    4.16    0.15    4.36</code></pre>
 <pre class="r"><code>decision.tree.predict &lt;- predict(decision.tree.model, 
                                  newdata = probe)
 confusionMatrix.decision.tree &lt;- 
@@ -253,7 +253,7 @@ random.forest.model &lt;- train(classe ~ .,
 # Stop the clock
 proc.time() - ptm</code></pre>
 <pre><code>##    user  system elapsed 
-##  250.70    1.97  253.82</code></pre>
+##  258.35    2.16  262.33</code></pre>
 <pre class="r"><code>random.forest.predict &lt;- predict(random.forest.model, 
                                  newdata = probe)
 confusionMatrix.random.forest &lt;- 
@@ -273,7 +273,7 @@ boosting.model &lt;- train(classe ~ .,
 # Stop the clock
 proc.time() - ptm</code></pre>
 <pre><code>##    user  system elapsed 
-##  126.53    0.42  127.21</code></pre>
+##  127.06    0.32  127.82</code></pre>
 <pre class="r"><code>boosting.predict &lt;- predict(boosting.model, 
                                  newdata = probe)
 confusionMatrix.boosting &lt;- 
